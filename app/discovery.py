@@ -35,10 +35,10 @@ async def _tcp_open(ip: str, port: int, timeout: float = 0.5) -> bool:
         return False
 
 
-async def _get(client, url: str, cap: int = 4000):
+async def _get(client, url: str, cap: int = 4000, headers: dict | None = None):
     """Return (status, text, server) or None."""
     try:
-        r = await client.get(url)
+        r = await client.get(url, headers=headers)
         return r.status_code, r.text[:cap], r.headers.get("server", "")
     except Exception:
         return None
@@ -168,8 +168,9 @@ def _parse_models(body: str) -> list:
     return res[:30]
 
 
-async def inspect_endpoint(url: str) -> dict:
-    """Live deep-probe of one endpoint: identity, version, models, path map."""
+async def inspect_endpoint(url: str, headers: dict | None = None) -> dict:
+    """Live deep-probe of one endpoint: identity, version, models, path map.
+    `headers` (e.g. Authorization) come from a service's stored auth, server-side only."""
     import httpx
     from urllib.parse import urlparse
     url = url.rstrip("/")
@@ -184,7 +185,8 @@ async def inspect_endpoint(url: str) -> dict:
                                      follow_redirects=True) as client:
             big = ("/v1/models", "/api/tags", "/openapi.json")
             got = await asyncio.gather(
-                *[_get(client, origin + p, 60000 if p in big else 4000) for p in paths])
+                *[_get(client, origin + p, 60000 if p in big else 4000, headers)
+                  for p in paths])
     except Exception as e:
         return {"url": origin, "ok": False, "error": f"{type(e).__name__}: {e}"}
     res = {p: g for p, g in zip(paths, got) if g}

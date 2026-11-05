@@ -217,16 +217,31 @@ async def get_discovery():
     return {"state": discovery.STATE, "items": items}
 
 
+def _svc_headers(svc: int | None) -> dict | None:
+    """Stored auth header for a service (server-side only; never returned as-is)."""
+    if not svc:
+        return None
+    s = db.get_service(svc)
+    if s and s.get("header_name"):
+        return {s["header_name"]: s.get("header_value") or ""}
+    return None
+
+
 @app.get("/api/inspect")
-async def inspect_endpoint(url: str):
+async def inspect_endpoint(url: str, svc: int | None = None):
     """Live endpoint deep-probe: identity, version, served models, path map."""
-    return await discovery.inspect_endpoint(url)
+    return await discovery.inspect_endpoint(url, _svc_headers(svc))
 
 
 @app.get("/api/harness-config")
-async def harness_config(url: str):
+async def harness_config(url: str, svc: int | None = None):
     """Everything an AI harness needs to use this model endpoint."""
-    info = await discovery.inspect_endpoint(url)
+    headers = _svc_headers(svc)
+    api_key = None
+    if headers:
+        v = next(iter(headers.values()), "")
+        api_key = v.split(" ", 1)[1] if v.lower().startswith("bearer ") else v or None
+    info = await discovery.inspect_endpoint(url, headers)
     if not info.get("ok"):
         return {"ok": False, "error": info.get("error", "unreachable")}
     kind = info["kind"]
@@ -237,6 +252,7 @@ async def harness_config(url: str):
                 "vllm": "as served (--api-key or 'not-needed')"}.get(kind, "not-needed")
     return {"ok": True, "kind": kind, "openai_base": openai_base,
             "models": info.get("models") or [], "key_hint": key_hint,
+            "api_key": api_key,
             "http_status": info.get("http_status"),
             "hostname": (await hostname_map()).get(
                 urlparse(origin).hostname or "")}

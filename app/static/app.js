@@ -107,9 +107,9 @@ function svcCard(s) {
     ${quickLinks(s)}
     <div class="svc-actions">
       <button class="btn small" onclick="checkNow(${s.id}, this)">Check now</button>
-      <button class="btn small" onclick="inspectUrl('${esc(s.url)}')" title="Deep-probe this endpoint">⌕</button>
+      <button class="btn small" onclick="inspectUrl('${esc(s.url)}', ${s.id})" title="Deep-probe this endpoint">⌕</button>
       ${["vllm", "llamaswap", "ollama", "litellm"].includes(s.type) && lc?.status_code === 200
-        ? `<button class="btn small accent" onclick="harnessConfig('${esc(s.url)}','${esc(s.name)}')" title="URL + model names for AI harnesses">⚙ Harness config</button>` : ""}
+        ? `<button class="btn small accent" onclick="harnessConfig('${esc(s.url)}','${esc(s.name)}', ${s.id})" title="URL + model names for AI harnesses">⚙ Harness config</button>` : ""}
       <button class="btn small" onclick="editSvc(${s.id})">Edit</button>
       <button class="btn small" onclick="delSvc(${s.id}, '${esc(s.name)}')">Delete</button>
       <span style="margin-left:auto;color:var(--muted);font-size:11px">${s.enabled ? "" : "disabled · "}checked ${ago(lc?.ts)}</span>
@@ -228,7 +228,7 @@ async function openDrawer(id) {
     </tr>`).join("");
   $("#d-body").innerHTML = `
     <div class="svc-url">${esc(s.url)} (${esc(s.method)})
-      <button class="btn small" onclick="inspectUrl('${esc(s.url)}')">⌕ Inspect endpoint</button></div>
+      <button class="btn small" onclick="inspectUrl('${esc(s.url)}', ${s.id})">⌕ Inspect endpoint</button></div>
     ${quickLinks(s)}
     <div class="svc-stats" style="margin:10px 0">
       <span>24h uptime <b>${s.uptime24 != null ? s.uptime24 + "%" : "—"}</b></span>
@@ -241,11 +241,11 @@ async function openDrawer(id) {
 $("#d-close").addEventListener("click", () => $("#drawer").classList.add("hidden"));
 
 /* ---------- endpoint inspector ---------- */
-async function inspectUrl(url) {
+async function inspectUrl(url, svcId) {
   $("#d-title").textContent = "Endpoint info";
   $("#d-body").innerHTML = `<div class="hint">Probing ${esc(url)} …</div>`;
   $("#drawer").classList.remove("hidden");
-  const r = await api(`/api/inspect?url=${encodeURIComponent(url)}`);
+  const r = await api(`/api/inspect?url=${encodeURIComponent(url)}` + (svcId ? `&svc=${svcId}` : ""));
   if (!r.ok) {
     $("#d-body").innerHTML = `<div class="svc-url">${esc(url)}</div>
       <div class="hint" style="color:var(--down);margin-top:10px">✗ ${esc(r.error || "unreachable")}</div>`;
@@ -270,11 +270,11 @@ async function inspectUrl(url) {
 }
 
 /* ---------- harness config generator ---------- */
-async function harnessConfig(url, name) {
+async function harnessConfig(url, name, svcId) {
   $("#d-title").textContent = `⚙ Harness config — ${name || url}`;
   $("#d-body").innerHTML = `<div class="hint">Probing endpoint for model names…</div>`;
   $("#drawer").classList.remove("hidden");
-  const r = await api(`/api/harness-config?url=${encodeURIComponent(url)}`);
+  const r = await api(`/api/harness-config?url=${encodeURIComponent(url)}` + (svcId ? `&svc=${svcId}` : ""));
   if (!r.ok) {
     $("#d-body").innerHTML = `<div class="hint" style="color:var(--down)">✗ ${esc(r.error || "probe failed")}</div>`;
     return;
@@ -292,7 +292,7 @@ async function harnessConfig(url, name) {
 
 function renderHC() {
   const r = state.hc, m = state.hcModel;
-  const keyline = r.kind === "ollama" ? "ollama" : "YOUR-KEY-or-not-needed";
+  const keyline = r.api_key || (r.kind === "ollama" ? "ollama" : "YOUR-KEY-or-not-needed");
   const body = JSON.stringify({ model: m, messages: [{ role: "user", content: "hello" }] });
   const blocks = {
     "Any OpenAI-compatible harness (env vars)":
@@ -313,6 +313,7 @@ function renderHC() {
     <div class="svc-url">${esc(r.url)}${r.hostname ? ` <span class="hostname">@${esc(r.hostname)}</span>` : ""}</div>
     <div class="hcline"><span class="hint">Base URL</span> <code class="big">${esc(r.openai_base)}</code>
       <button class="btn small" onclick="navigator.clipboard.writeText('${esc(r.openai_base)}').then(()=>toast('Base URL copied') )">⧉</button></div>
+    ${r.api_key ? `<div class="hint" style="margin:2px 0 6px">🔑 using the auth key stored on this service (masked in the registry, included in snippets below)</div>` : ""}
     ${(r.models || []).length ? `
     <div class="sect">Model name <span class="hint">(click to switch configs)</span></div>
     <div>${r.models.map((mm, i) =>
