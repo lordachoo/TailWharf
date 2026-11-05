@@ -108,7 +108,7 @@ function svcCard(s) {
     <div class="svc-actions">
       <button class="btn small" onclick="checkNow(${s.id}, this)">Check now</button>
       <button class="btn small" onclick="inspectUrl('${esc(s.url)}')" title="Deep-probe this endpoint">⌕</button>
-      ${["vllm", "llamaswap", "ollama"].includes(s.type)
+      ${["vllm", "llamaswap", "ollama"].includes(s.type) && lc?.status_code === 200
         ? `<button class="btn small accent" onclick="harnessConfig('${esc(s.url)}','${esc(s.name)}')" title="URL + model names for AI harnesses">⚙ Harness config</button>` : ""}
       <button class="btn small" onclick="editSvc(${s.id})">Edit</button>
       <button class="btn small" onclick="delSvc(${s.id}, '${esc(s.name)}')">Delete</button>
@@ -277,6 +277,12 @@ async function harnessConfig(url, name) {
   const r = await api(`/api/harness-config?url=${encodeURIComponent(url)}`);
   if (!r.ok) {
     $("#d-body").innerHTML = `<div class="hint" style="color:var(--down)">✗ ${esc(r.error || "probe failed")}</div>`;
+    return;
+  }
+  if (!r.models.length && r.http_status !== 200) {
+    $("#d-body").innerHTML = `<div class="hint">This endpoint does not appear to serve models
+      (no model list answered — /v1/models returned ${r.http_status ?? "nothing"}).
+      It is likely a gateway or plain health endpoint — monitor it as type <code>http</code> or <code>tcp</code> instead.</div>`;
     return;
   }
   state.hc = r;

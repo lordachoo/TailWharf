@@ -20,3 +20,6 @@ nul
 # OS noise
 .DS_Store
 Thumbs.db
+
+# pi assistant working memory (local only)
+.pi/
