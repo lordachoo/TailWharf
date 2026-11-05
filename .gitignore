@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Local database (contains service definitions incl. auth header NAMES)
+data/
+
+# Secrets & local config — NEVER commit
+.env
+.env.local
+*.key
+
+# Runtime artifacts
+*.log
+server.log
+nul
+
+# OS noise
+.DS_Store
+Thumbs.db

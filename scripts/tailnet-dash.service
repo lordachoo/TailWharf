@@ -1,0 +1,18 @@
+[Unit]
+Description=Tailnet AI Service Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# --- adjust these three to your install ---
+User=youruser
+WorkingDirectory=/opt/tailnet-dash
+ExecStart=/opt/tailnet-dash/.venv/bin/python /opt/tailnet-dash/run.py
+# ------------------------------------------
+Restart=always
+RestartSec=5
+Environment=DASH_PORT=8088
+
+[Install]
+WantedBy=multi-user.target

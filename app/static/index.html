@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tailnet AI Dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="logo">⬡</span>
+    <div>
+      <h1>Tailnet AI Dashboard</h1>
+      <div class="sub" id="tailnet-sub">connecting…</div>
+    </div>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<nav>
+  <button class="tab active" data-tab="dashboard">Services</button>
+  <button class="tab" data-tab="discovery">Discovery <span class="badge" id="disc-badge"></span></button>
+  <button class="tab" data-tab="tailnet">Tailnet</button>
+  <button class="tab" data-tab="mcp">MCP Hub</button>
+</nav>
+
+<main>
+  <!-- SERVICES -->
+  <section id="tab-dashboard">
+    <div class="toolbar">
+      <button class="btn primary" id="btn-add">＋ Add service</button>
+      <button class="btn" id="btn-checkall">Check all now</button>
+      <span class="spacer"></span>
+      <button class="btn" id="btn-export" title="Download service registry as JSON">⬇ Export</button>
+      <button class="btn" id="btn-export-secret" title="Export INCLUDING auth header secrets — keep the file safe">⬇ Export +secrets</button>
+      <button class="btn" id="btn-import">⬆ Import</button>
+      <input type="file" id="import-file" accept="application/json" class="hidden">
+      <span class="hint" id="poll-hint"></span>
+    </div>
+    <div id="add-form" class="card form hidden">
+      <h3 id="form-title">Add service</h3>
+      <div class="grid2">
+        <label>Name <input id="f-name" placeholder="SearXNG (my-server)"></label>
+        <label>Type
+          <select id="f-type"></select>
+        </label>
+        <label class="span2">URL <input id="f-url" placeholder="http://100.x.y.z:8888 (tailnet IP or hostname)">
+          <small id="f-url-preview" class="preview"></small></label>
+        <label>Method
+          <select id="f-method"><option>GET</option><option>POST</option><option>HEAD</option></select>
+        </label>
+        <label>Expected status <input id="f-status" type="number" value="200"></label>
+        <label>Auth header (optional) <input id="f-hname" placeholder="Authorization"></label>
+        <label>Header value <input id="f-hval" type="password" placeholder="Bearer …"></label>
+        <label class="span2">Notes <input id="f-notes" placeholder="optional"></label>
+        <label class="span2">Custom quick links — one per line: <code>Label | https://url</code>
+          <textarea id="f-links" rows="3" placeholder="Grafana | http://100.x.y.z:3001/grafana"></textarea>
+          <small class="preview">Type-based quick links (Web UI, API docs, …) are added automatically</small></label>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="btn-save">Save</button>
+        <button class="btn" id="btn-cancel">Cancel</button>
+      </div>
+    </div>
+    <div id="services" class="grid"></div>
+  </section>
+
+  <!-- DISCOVERY -->
+  <section id="tab-discovery" class="hidden">
+    <div class="toolbar">
+      <button class="btn primary" id="btn-scan">▶ Run discovery scan</button>
+      <span class="hint" id="disc-status"></span>
+    </div>
+    <p class="hint">Scans every <b>online</b> tailnet device on ~20 common AI-service ports
+      (Ollama, vLLM, SearXNG, Crawl4AI, Open WebUI, ComfyUI…) and fingerprints what answers.</p>
+    <div id="discoveries" class="grid"></div>
+  </section>
+
+  <!-- MCP HUB -->
+  <section id="tab-mcp" class="hidden">
+    <div id="mcp-endpoint"></div>
+
+    <div class="card howto">
+      <h3>Connect an agent to this hub</h3>
+      <ol>
+        <li>Add the config above to your client's MCP servers file:
+          <ul>
+            <li><b>pi</b>: user-level <code>~/.pi/agent/mcp.json</code> (every project) or project-level <code>.pi/mcp.json</code> — replaces the whole <code>{ "mcpServers": { … } }</code> wrapper around the snippet</li>
+            <li><b>Claude Desktop / Cursor / Codex / any MCP client</b>: same <code>mcpServers</code> shape; <code>url</code> + <code>headers</code> work with streamable-HTTP clients</li>
+          </ul>
+        </li>
+        <li>Replace <code>&lt;MCP_TOKEN&gt;</code> with the <code>MCP_TOKEN</code> value from this app's <code>.env</code> (delete the <code>headers</code> line only if no token is set — not recommended)</li>
+        <li>Restart the agent (pi: <code>/reload</code> or new session) and verify: <code>/mcp</code> or <code>pi mcp list</code> → <span class="hint">ainet: connected, 7 tools</span></li>
+      </ol>
+      <h4>Make an agent actually use it</h4>
+      <p class="hint">Tools are declared automatically (direct exposure). Normal phrasing works — but for reliable use, paste this into your agent's instructions (pi: <code>AGENTS.md</code> or system prompt):</p>
+      <pre class="console" id="policy-pre">Web access policy:
+- For ANY question needing fresh/external info, use the ainet MCP tools:
+  web_search (query) then web_fetch (best URL).
+- For infrastructure questions about this network use:
+  services_status, tailnet_status, discovery_list, check_service, discovery_run.
+- Never claim you cannot access the internet; the ainet hub provides it.</pre>
+      <div class="row"><button class="btn small" id="btn-copy-policy">Copy policy</button></div>
+      <h4>Example prompts</h4>
+      <ul class="exlist">
+        <li>💰 <i>“Search the web for the latest stable release of Crawl4AI and what changed”</i> → web_search + web_fetch</li>
+        <li>🩺 <i>“Is anything on my tailnet down? Check anything red right now”</i> → services_status + check_service</li>
+        <li>🔍 <i>“Run a discovery scan and tell me if any new services appeared”</i> → discovery_run + discovery_list</li>
+        <li>🌐 <i>“Read https://… and summarize it”</i> → web_fetch</li>
+      </ul>
+    </div>
+    <h3 class="sect">Tools</h3>
+    <div class="table-wrap"><table id="mcp-tools">
+      <thead><tr><th>Enabled</th><th>Tool</th><th>Description</th><th></th></tr></thead>
+      <tbody></tbody></table></div>
+    <div class="card" style="margin-top:14px">
+      <h3>Test console</h3>
+      <div class="grid2">
+        <label>Tool <select id="mcp-test-tool"></select></label>
+        <label>Args (JSON) <input id="mcp-test-args" value="{}"></label>
+      </div>
+      <div class="row"><button class="btn primary" id="mcp-test-run">Run</button></div>
+      <pre id="mcp-test-out" class="console hidden"></pre>
+    </div>
+    <h3 class="sect">Latest activity <span class="live">● live</span></h3>
+    <div class="table-wrap"><table id="mcp-log">
+      <thead><tr><th>When</th><th>Tool</th><th>Client</th><th>Args</th><th>Result</th><th>ms</th></tr></thead>
+      <tbody></tbody></table></div>
+  </section>
+
+  <!-- TAILNET -->
+  <section id="tab-tailnet" class="hidden">
+    <div id="tailnet-info"></div>
+    <div class="table-wrap">
+      <table id="tailnet-table">
+        <thead><tr><th>Status</th><th>Hostname</th><th>Tailscale IP</th><th>OS</th><th>DNS name</th><th>Relay</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- detail drawer -->
+<div id="drawer" class="drawer hidden">
+  <div class="drawer-head">
+    <h3 id="d-title"></h3>
+    <button class="btn x" id="d-close">✕</button>
+  </div>
+  <div id="d-body"></div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script src="app.js"></script>
+</body>
+</html>
