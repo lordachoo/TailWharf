@@ -3,6 +3,7 @@ import asyncio
 import json
 import time
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -12,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from . import db, discovery, mcp_hub, poller
 from .checks import LINK_PRESETS, PRESETS, apply_preset, check_service
-from .tailscale import tailnet_status
+from .tailscale import hostname_map, tailnet_status
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -98,12 +99,18 @@ async def overview():
 
 @app.get("/api/services")
 async def list_services():
+    hosts = await hostname_map()
     out = []
     for s in db.list_services():
         lc = db.last_check(s["id"])
+        try:
+            host = urlparse(s["url"]).hostname or ""
+        except ValueError:
+            host = ""
         out.append({
             **{k: v for k, v in s.items() if k != "header_value"},
             "has_auth": bool(s.get("header_name")),
+            "hostname": hosts.get(host),
             "links": _parse_links(s.get("links")),
             "last_check": lc,
             "uptime24": db.uptime_pct(s["id"], 24),
@@ -214,6 +221,23 @@ async def get_discovery():
 async def inspect_endpoint(url: str):
     """Live endpoint deep-probe: identity, version, served models, path map."""
     return await discovery.inspect_endpoint(url)
+
+
+@app.get("/api/harness-config")
+async def harness_config(url: str):
+    """Everything an AI harness needs to use this model endpoint."""
+    info = await discovery.inspect_endpoint(url)
+    if not info.get("ok"):
+        return {"ok": False, "error": info.get("error", "unreachable")}
+    kind = info["kind"]
+    origin = info["url"].rstrip("/")
+    openai_base = f"{origin}/v1"
+    key_hint = {"ollama": "ollama", "llamaswap": "as configured in llama-swap",
+                "vllm": "as served (--api-key or 'not-needed')"}.get(kind, "not-needed")
+    return {"ok": True, "kind": kind, "openai_base": openai_base,
+            "models": info.get("models") or [], "key_hint": key_hint,
+            "hostname": (await hostname_map()).get(
+                urlparse(origin).hostname or "")}
 
 
 @app.post("/api/discovery/run")

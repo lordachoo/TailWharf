@@ -96,7 +96,7 @@ function svcCard(s) {
       <span class="svc-name" onclick="openDrawer(${s.id})">${esc(s.name)}</span>
       <span class="type-tag">${esc(typeLabel)}</span>
     </div>
-    <div class="svc-url"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></div>
+    <div class="svc-url"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>${s.hostname ? ` <span class="hostname">@${esc(s.hostname)}</span>` : ""}</div>
     <div class="svc-stats">
       <span><span class="dot ${st}"></span><b>${label}</b></span>
       <span>${lc?.latency_ms != null ? `<b>${lc.latency_ms.toFixed(0)} ms</b>` : ""}</span>
@@ -107,6 +107,9 @@ function svcCard(s) {
     ${quickLinks(s)}
     <div class="svc-actions">
       <button class="btn small" onclick="checkNow(${s.id}, this)">Check now</button>
+      <button class="btn small" onclick="inspectUrl('${esc(s.url)}')" title="Deep-probe this endpoint">⌕</button>
+      ${["vllm", "llamaswap", "ollama"].includes(s.type)
+        ? `<button class="btn small accent" onclick="harnessConfig('${esc(s.url)}','${esc(s.name)}')" title="URL + model names for AI harnesses">⚙ Harness config</button>` : ""}
       <button class="btn small" onclick="editSvc(${s.id})">Edit</button>
       <button class="btn small" onclick="delSvc(${s.id}, '${esc(s.name)}')">Delete</button>
       <span style="margin-left:auto;color:var(--muted);font-size:11px">${s.enabled ? "" : "disabled · "}checked ${ago(lc?.ts)}</span>
@@ -266,6 +269,57 @@ async function inspectUrl(url) {
       `<span class="hint" style="margin-right:12px">${esc(p.path)} <b style="color:${p.status < 400 ? "var(--up)" : "var(--down)"}">${p.status}</b></span>`).join("")}</div>`;
 }
 
+/* ---------- harness config generator ---------- */
+async function harnessConfig(url, name) {
+  $("#d-title").textContent = `⚙ Harness config — ${name || url}`;
+  $("#d-body").innerHTML = `<div class="hint">Probing endpoint for model names…</div>`;
+  $("#drawer").classList.remove("hidden");
+  const r = await api(`/api/harness-config?url=${encodeURIComponent(url)}`);
+  if (!r.ok) {
+    $("#d-body").innerHTML = `<div class="hint" style="color:var(--down)">✗ ${esc(r.error || "probe failed")}</div>`;
+    return;
+  }
+  state.hc = r;
+  state.hcModel = r.models[0] || "MODEL-NAME";
+  renderHC();
+}
+
+function renderHC() {
+  const r = state.hc, m = state.hcModel;
+  const keyline = r.kind === "ollama" ? "ollama" : "YOUR-KEY-or-not-needed";
+  const body = JSON.stringify({ model: m, messages: [{ role: "user", content: "hello" }] });
+  const blocks = {
+    "Any OpenAI-compatible harness (env vars)":
+      `OPENAI_BASE_URL=${r.openai_base}\nOPENAI_API_KEY=${keyline}\nOPENAI_MODEL=${m}`,
+    "curl smoke test":
+      `curl ${r.openai_base}/chat/completions \\\n  -H "Content-Type: application/json" \\\n  -d '${body}'`,
+    "Python (openai package)":
+      `from openai import OpenAI\nclient = OpenAI(base_url="${r.openai_base}", api_key="${keyline}")\nresp = client.chat.completions.create(model="${m}",\n    messages=[{"role": "user", "content": "hello"}])`,
+  };
+  if (r.kind === "ollama") blocks["Ollama CLI"] = `ollama run ${m}`;
+  if (r.kind === "llamaswap") blocks["llama-swap note"] =
+    "Model names are llama-swap aliases (its /ui shows them). Backend API keys stay inside llama-swap.";
+  if (r.kind === "vllm") blocks["vLLM note"] =
+    "Model name = exactly what /v1/models reports (usually the --model arg). Needs the --api-key value if one was set.";
+  $("#d-body").innerHTML = `
+    <div class="svc-url">${esc(r.url)}${r.hostname ? ` <span class="hostname">@${esc(r.hostname)}</span>` : ""}</div>
+    <div class="hcline"><span class="hint">Base URL</span> <code class="big">${esc(r.openai_base)}</code>
+      <button class="btn small" onclick="navigator.clipboard.writeText('${esc(r.openai_base)}').then(()=>toast('Base URL copied') )">⧉</button></div>
+    ${(r.models || []).length ? `
+    <div class="sect">Model name <span class="hint">(click to switch configs)</span></div>
+    <div>${r.models.map((mm, i) =>
+      `<span class="type-tag modelchip ${mm === m ? "on" : ""}" onclick="state.hcModel=state.hc.models[${i}];renderHC()">${esc(mm)}</span>`).join(" ")}</div>` :
+      `<div class="hint" style="margin-top:8px">No models answered /v1/models — fill the model name manually in the snippets below.</div>`}
+    ${Object.entries(blocks).map(([title, code], i) => `
+      <div class="sect">${esc(title)}</div>
+      <pre class="console snip">${esc(code)}<button class="btn small snipcopy" onclick="copySnip(this)">⧉ copy</button></pre>`).join("")}`;
+}
+
+function copySnip(btn) {
+  const code = btn.previousSibling.textContent.replace(/⧉ copy$/, "");
+  navigator.clipboard.writeText(code).then(() => toast("Copied"));
+}
+
 /* ---------- discovery ---------- */
 async function loadDiscoveries() {
   const d = await api("/api/discovery");
@@ -366,7 +420,7 @@ async function loadMCP() {
 
   $("#mcp-log tbody").innerHTML = (m.call_log || []).map((c) => `<tr${c.ok ? "" : ' class="rowerr"'}>
     <td title="${new Date(c.ts * 1000).toLocaleTimeString()}">${ago(c.ts)}</td>
-    <td><b>${esc(c.tool)}</b></td><td>${esc(c.client || "")}</td>
+    <td><b>${esc(c.tool)}</b></td><td>${esc(c.client_name || c.client || "")}</td>
     <td class="svc-detail" title="${esc(c.args_summary)}">${esc((c.args_summary || "").slice(0, 60))}</td>
     <td style="color:${c.ok ? "var(--up)" : "var(--down)"}">${c.ok ? "ok" : "ERR"}</td>
     <td>${c.ms ?? "—"}</td></tr>`).join("")
@@ -383,7 +437,7 @@ async function loadMCPLog() {
   const m = await api("/api/mcp");
   $("#mcp-log tbody").innerHTML = (m.call_log || []).map((c) => `<tr${c.ok ? "" : ' class="rowerr"'}>
     <td title="${new Date(c.ts * 1000).toLocaleTimeString()}">${ago(c.ts)}</td>
-    <td><b>${esc(c.tool)}</b></td><td>${esc(c.client || "")}</td>
+    <td><b>${esc(c.tool)}</b></td><td>${esc(c.client_name || c.client || "")}</td>
     <td class="svc-detail" title="${esc(c.args_summary)}">${esc((c.args_summary || "").slice(0, 60))}</td>
     <td style="color:${c.ok ? "var(--up)" : "var(--down)"}">${c.ok ? "ok" : "ERR"}</td>
     <td>${c.ms ?? "—"}</td></tr>`).join("") || "";

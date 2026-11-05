@@ -120,5 +120,13 @@ canvas.sparkline { vertical-align: middle; }
 .howto ol, .howto ul { margin: 6px 0; padding-left: 22px; line-height: 1.7; }
 .howto code { background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
   padding: 1px 5px; font-size: 12px; }
+.hostname { color: var(--muted); font-size: 12px; }
+.btn.accent { border-color: var(--accent); color: var(--accent); }
+.hcline { margin: 12px 0 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+code.big { font-size: 14px; color: var(--accent); background: var(--bg); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); }
+.modelchip { cursor: pointer; margin: 2px 4px 2px 0; display: inline-block; opacity: .65; }
+.modelchip.on { opacity: 1; border-color: var(--accent); color: var(--accent); }
+.snip { position: relative; padding-bottom: 34px; }
+.snipcopy { position: absolute; right: 8px; bottom: 8px; }
 .exlist { list-style: none; padding-left: 4px; }
 .exlist li { margin: 4px 0; }

@@ -226,7 +226,11 @@ async def mcp_endpoint(request: Request):
 
 @router.get("/api/mcp")
 async def mcp_admin(request: Request):
+    from .tailscale import hostname_map
     dis = _disabled()
+    hosts = await hostname_map()
+    log_named = [dict(c, client_name=hosts.get(c.get("client")))
+                 for c in db.recent_mcp_calls(50)]
     host = request.headers.get("host", "localhost:8088")
     snippet = {"mcpServers": {"ainet": {"url": f"http://{host}/mcp"}}}
     if MCP_TOKEN:
@@ -237,7 +241,7 @@ async def mcp_admin(request: Request):
         "crawl4ai_key_configured": bool(CRAWL4AI_KEY),
         "tools": [{"name": n, "description": t["description"], "enabled": n not in dis}
                   for n, t in TOOLS.items()],
-        "call_log": db.recent_mcp_calls(50),
+        "call_log": log_named,
         "client_snippet": json.dumps(snippet, indent=2),
     }
 

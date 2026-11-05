@@ -2,7 +2,23 @@
 import asyncio
 import json
 import shutil
+import time
 from pathlib import Path
+
+_host_map_cache: dict = {"map": {}, "ts": 0.0}
+
+
+async def hostname_map(ttl: float = 60.0) -> dict:
+    """{tailnet IP -> short hostname}, cached for `ttl` seconds."""
+    if time.time() - _host_map_cache["ts"] > ttl or not _host_map_cache["map"]:
+        st = await tailnet_status()
+        m = {}
+        for p in st.get("peers", []) + ([st["self"]] if st.get("self") else []):
+            if p.get("ip") and p.get("hostname"):
+                m[p["ip"]] = p["hostname"].split(".")[0]
+        if m:
+            _host_map_cache.update(map=m, ts=time.time())
+    return _host_map_cache["map"]
 
 _CANDIDATES = [
     shutil.which("tailscale"),
