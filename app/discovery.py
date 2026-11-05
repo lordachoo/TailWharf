@@ -171,6 +171,8 @@ async def inspect_endpoint(url: str) -> dict:
     url = url.rstrip("/")
     u = urlparse(url)
     port = u.port or (443 if u.scheme == "https" else 80)
+    # Normalize: always probe from scheme://host:port, never from a path-baked URL
+    origin = f"{u.scheme}://{u.netloc}"
     paths = ["/", "/healthz", "/health", "/openapi.json", "/version",
              "/v1/models", "/api/version", "/api/tags"]
     try:
@@ -178,9 +180,9 @@ async def inspect_endpoint(url: str) -> dict:
                                      follow_redirects=True) as client:
             big = ("/v1/models", "/api/tags", "/openapi.json")
             got = await asyncio.gather(
-                *[_get(client, url + p, 60000 if p in big else 4000) for p in paths])
+                *[_get(client, origin + p, 60000 if p in big else 4000) for p in paths])
     except Exception as e:
-        return {"url": url, "ok": False, "error": f"{type(e).__name__}: {e}"}
+        return {"url": origin, "ok": False, "error": f"{type(e).__name__}: {e}"}
     res = {p: g for p, g in zip(paths, got) if g}
     if not res:
         return {"url": url, "ok": False, "error": "no HTTP response on any known path"}
@@ -202,7 +204,7 @@ async def inspect_endpoint(url: str) -> dict:
             if models:
                 break
     return {
-        "url": url, "ok": True, "kind": kind,
+        "url": origin, "ok": True, "kind": kind,
         "http_status": root[0] if root else None,
         "server": server, "title": title, "version": version,
         "health_path": _pick_health(res, kind),
