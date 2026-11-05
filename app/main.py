@@ -297,6 +297,16 @@ async def import_registry(body: dict):
     return db.import_services(services, mode)
 
 
+# Always revalidate UI assets: browser gets cheap 304s, never a stale app.js
+@app.middleware("http")
+async def no_stale_ui(request: Request, call_next):
+    response = await call_next(request)
+    p = request.url.path
+    if p in ("", "/", "/index.html") or p.endswith((".js", ".css")):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # MCP hub (POST /mcp + /api/mcp/*) then static SPA last so /api/* wins
 app.include_router(mcp_hub.router)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
