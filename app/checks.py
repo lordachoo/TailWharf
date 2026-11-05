@@ -15,6 +15,9 @@ PRESETS = {
     "openwebui": {"path": "/health/checks","label": "Open WebUI"},
     "docling":   {"path": "/health",       "label": "IBM Docling Serve"},
     "llamaswap": {"path": "/health",       "label": "llama-swap"},
+    "http":      {"path": "/",              "label": "Generic HTTP"},
+    "health":    {"path": "",               "label": "Health endpoint"},
+    "tcp":       {"path": None,             "label": "TCP only"},
 }
 
 # Default quick-links per service type (relative to the service origin).
@@ -47,8 +50,7 @@ LINK_PRESETS = {
         {"label": "Tags JSON", "path": "/api/tags"},
         {"label": "Version JSON", "path": "/api/version"},
     ],
-    "http":      {"path": "/",             "label": "Generic HTTP"},
-    "tcp":       {"path": None,            "label": "TCP only"},
+    # health / http / tcp: no default quick-links (intentionally plain)
 }
 
 
