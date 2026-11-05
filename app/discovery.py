@@ -8,7 +8,7 @@ from .tailscale import tailnet_status
 
 # Common AI / self-hosted service ports (port -> hint kind when HTTP is silent)
 SCAN_PORTS = {
-    80: "http", 443: "http", 1234: "vllm", 3000: "openwebui", 3001: "http",
+    80: "http", 443: "http", 1234: "vllm", 3000: "openwebui", 3001: "http", 4000: "litellm",
     5000: "http", 5001: "docling", 5432: "tcp", 6333: "http", 6379: "tcp",
     7860: "http", 7861: "http", 8000: "vllm", 8001: "vllm", 8002: "vllm",
     8080: "http", 8081: "vllm", 8088: "http", 8090: "http", 8443: "http",
@@ -50,8 +50,10 @@ async def _classify(ip: str, port: int):
     probe_paths = ["/", "/healthz", "/health", "/openapi.json"]
     if port in (5001, 5000):
         probe_paths.append("/version")
-    if port in (1234, 8000, 8001, 8002, 8080, 8081, 28080):
-        probe_paths.append("/v1/models")  # OpenAI-compat: vLLM, llama.cpp, cpgw…
+    if port in (1234, 8000, 8001, 8002, 8080, 8081, 28080, 4000):
+        probe_paths.append("/v1/models")  # OpenAI-compat: vLLM, llama.cpp, cpgw, LiteLLM…
+    if SCAN_PORTS.get(port) == "litellm":
+        probe_paths.append("/health/liveliness")
 
     for scheme in (["https", "http"] if port in TLS_PORTS else ["http"]):
         base = f"{scheme}://{ip}:{port}"
@@ -94,6 +96,8 @@ def _kind(res, title, body, server, port) -> str:
         return "docling"
     if "crawl4ai" in low:
         return "crawl4ai"
+    if "litellm" in low or "litellm" in tlow:
+        return "litellm"
     if "ollama" in low or (res.get("/health") and '"/version"' in (res["/health"][1] or "")):
         return "ollama"
     # llama-swap fronting one or more llama.cpp servers
@@ -114,7 +118,7 @@ def _kind(res, title, body, server, port) -> str:
 
 def _pick_health(res, kind) -> str | None:
     """Choose the best working health path for this service."""
-    for p in ("/healthz", "/health"):
+    for p in ("/health/liveliness", "/healthz", "/health"):
         r = res.get(p)
         if r and r[0] == 200:
             return p
@@ -173,8 +177,8 @@ async def inspect_endpoint(url: str) -> dict:
     port = u.port or (443 if u.scheme == "https" else 80)
     # Normalize: always probe from scheme://host:port, never from a path-baked URL
     origin = f"{u.scheme}://{u.netloc}"
-    paths = ["/", "/healthz", "/health", "/openapi.json", "/version",
-             "/v1/models", "/api/version", "/api/tags"]
+    paths = ["/", "/healthz", "/health", "/health/liveliness", "/openapi.json",
+             "/version", "/v1/models", "/api/version", "/api/tags"]
     try:
         async with httpx.AsyncClient(timeout=4.0, verify=False,
                                      follow_redirects=True) as client:

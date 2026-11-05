@@ -108,7 +108,7 @@ function svcCard(s) {
     <div class="svc-actions">
       <button class="btn small" onclick="checkNow(${s.id}, this)">Check now</button>
       <button class="btn small" onclick="inspectUrl('${esc(s.url)}')" title="Deep-probe this endpoint">⌕</button>
-      ${["vllm", "llamaswap", "ollama"].includes(s.type) && lc?.status_code === 200
+      ${["vllm", "llamaswap", "ollama", "litellm"].includes(s.type) && lc?.status_code === 200
         ? `<button class="btn small accent" onclick="harnessConfig('${esc(s.url)}','${esc(s.name)}')" title="URL + model names for AI harnesses">⚙ Harness config</button>` : ""}
       <button class="btn small" onclick="editSvc(${s.id})">Edit</button>
       <button class="btn small" onclick="delSvc(${s.id}, '${esc(s.name)}')">Delete</button>
@@ -307,6 +307,8 @@ function renderHC() {
     "Model names are llama-swap aliases (its /ui shows them). Backend API keys stay inside llama-swap.";
   if (r.kind === "vllm") blocks["vLLM note"] =
     "Model name = exactly what /v1/models reports (usually the --model arg). Needs the --api-key value if one was set.";
+  if (r.kind === "litellm") blocks["LiteLLM note"] =
+    "API key = a LiteLLM virtual key (create in Admin UI → API Keys, or the master key).\nModel name = a model alias from litellm_config.yaml model_groups / Admin UI → Models.\n/v1/models needs the key too, so grab the exact alias there with: curl -H 'Authorization: Bearer KEY' " + r.openai_base + "/models";
   $("#d-body").innerHTML = `
     <div class="svc-url">${esc(r.url)}${r.hostname ? ` <span class="hostname">@${esc(r.hostname)}</span>` : ""}</div>
     <div class="hcline"><span class="hint">Base URL</span> <code class="big">${esc(r.openai_base)}</code>

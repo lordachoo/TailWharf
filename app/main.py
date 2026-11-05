@@ -233,6 +233,7 @@ async def harness_config(url: str):
     origin = info["url"].rstrip("/")
     openai_base = f"{origin}/v1"
     key_hint = {"ollama": "ollama", "llamaswap": "as configured in llama-swap",
+                "litellm": "LiteLLM virtual key (or master key)",
                 "vllm": "as served (--api-key or 'not-needed')"}.get(kind, "not-needed")
     return {"ok": True, "kind": kind, "openai_base": openai_base,
             "models": info.get("models") or [], "key_hint": key_hint,

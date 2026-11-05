@@ -15,6 +15,7 @@ PRESETS = {
     "openwebui": {"path": "/health/checks","label": "Open WebUI"},
     "docling":   {"path": "/health",       "label": "IBM Docling Serve"},
     "llamaswap": {"path": "/health",       "label": "llama-swap"},
+    "litellm":   {"path": "/health/liveliness", "label": "LiteLLM Proxy"},
     "http":      {"path": "/",              "label": "Generic HTTP"},
     "health":    {"path": "",               "label": "Health endpoint"},
     "tcp":       {"path": None,             "label": "TCP only"},
@@ -49,6 +50,14 @@ LINK_PRESETS = {
     "ollama": [
         {"label": "Tags JSON", "path": "/api/tags"},
         {"label": "Version JSON", "path": "/api/version"},
+    ],
+    "litellm": [
+        {"label": "Admin UI", "path": "/ui/"},
+        {"label": "Cost tracking", "path": "/ui/cost-tracking/"},
+        {"label": "Usage", "path": "/ui/usage/"},
+        {"label": "Users", "path": "/ui/users/"},
+        {"label": "Models JSON", "path": "/v1/models"},
+        {"label": "Liveliness", "path": "/health/liveliness"},
     ],
     # health / http / tcp: no default quick-links (intentionally plain)
 }
