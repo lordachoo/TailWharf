@@ -236,6 +236,7 @@ async def harness_config(url: str):
                 "vllm": "as served (--api-key or 'not-needed')"}.get(kind, "not-needed")
     return {"ok": True, "kind": kind, "openai_base": openai_base,
             "models": info.get("models") or [], "key_hint": key_hint,
+            "http_status": info.get("http_status"),
             "hostname": (await hostname_map()).get(
                 urlparse(origin).hostname or "")}
 
