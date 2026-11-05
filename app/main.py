@@ -210,6 +210,12 @@ async def get_discovery():
     return {"state": discovery.STATE, "items": items}
 
 
+@app.get("/api/inspect")
+async def inspect_endpoint(url: str):
+    """Live endpoint deep-probe: identity, version, served models, path map."""
+    return await discovery.inspect_endpoint(url)
+
+
 @app.post("/api/discovery/run")
 async def run_discovery():
     started = await discovery.start_discovery()

@@ -224,7 +224,8 @@ async function openDrawer(id) {
       <td class="svc-detail" title="${esc(h.detail)}">${esc((h.detail || "").slice(0, 60))}</td>
     </tr>`).join("");
   $("#d-body").innerHTML = `
-    <div class="svc-url">${esc(s.url)} (${esc(s.method)})</div>
+    <div class="svc-url">${esc(s.url)} (${esc(s.method)})
+      <button class="btn small" onclick="inspectUrl('${esc(s.url)}')">⌕ Inspect endpoint</button></div>
     ${quickLinks(s)}
     <div class="svc-stats" style="margin:10px 0">
       <span>24h uptime <b>${s.uptime24 != null ? s.uptime24 + "%" : "—"}</b></span>
@@ -235,6 +236,35 @@ async function openDrawer(id) {
   $("#drawer").classList.remove("hidden");
 }
 $("#d-close").addEventListener("click", () => $("#drawer").classList.add("hidden"));
+
+/* ---------- endpoint inspector ---------- */
+async function inspectUrl(url) {
+  $("#d-title").textContent = "Endpoint info";
+  $("#d-body").innerHTML = `<div class="hint">Probing ${esc(url)} …</div>`;
+  $("#drawer").classList.remove("hidden");
+  const r = await api(`/api/inspect?url=${encodeURIComponent(url)}`);
+  if (!r.ok) {
+    $("#d-body").innerHTML = `<div class="svc-url">${esc(url)}</div>
+      <div class="hint" style="color:var(--down);margin-top:10px">✗ ${esc(r.error || "unreachable")}</div>`;
+    return;
+  }
+  const badge = (t) => `<span class="type-tag" style="margin:2px 4px 2px 0;display:inline-block">${esc(t)}</span>`;
+  $("#d-body").innerHTML = `
+    <div class="svc-url">${esc(r.url)}</div>
+    <div class="svc-stats" style="margin:12px 0">
+      <span>kind <b>${esc(r.kind)}</b></span>
+      <span>http <b style="color:${(r.http_status ?? 999) < 400 ? "var(--up)" : "var(--down)"}">${r.http_status ?? "no /"}</b></span>
+      ${r.server ? `<span>server <b>${esc(r.server)}</b></span>` : ""}
+      ${r.title ? `<span>app <b>${esc(r.title)}</b></span>` : ""}
+      ${r.version ? `<span>version <b>${esc(r.version)}</b></span>` : ""}
+      ${r.health_path ? `<span>health <b><code>${esc(r.health_path)}</code></b></span>` : ""}
+    </div>
+    ${(r.models || []).length ? `<div class="sect">Models served (${r.models.length})</div>
+      <div>${r.models.map(badge).join("")}</div>` : ""}
+    <div class="sect">Paths probed</div>
+    <div>${(r.paths || []).map((p) =>
+      `<span class="hint" style="margin-right:12px">${esc(p.path)} <b style="color:${p.status < 400 ? "var(--up)" : "var(--down)"}">${p.status}</b></span>`).join("")}</div>`;
+}
 
 /* ---------- discovery ---------- */
 async function loadDiscoveries() {
@@ -261,6 +291,7 @@ async function loadDiscoveries() {
         ${x.already_added
           ? `<span class="hint">✓ already tracked</span>`
           : `<button class="btn small primary" onclick="addDisc(${x.id})">＋ Add to dashboard</button>`}
+        <button class="btn small" onclick="inspectUrl('${esc(x.url)}')">⌕ Info</button>
         <button class="btn small" onclick="dismissDisc(${x.id})">Dismiss</button>
       </div>
     </div>`).join("")

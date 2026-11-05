@@ -35,11 +35,11 @@ async def _tcp_open(ip: str, port: int, timeout: float = 0.5) -> bool:
         return False
 
 
-async def _get(client, url: str):
+async def _get(client, url: str, cap: int = 4000):
     """Return (status, text, server) or None."""
     try:
         r = await client.get(url)
-        return r.status_code, r.text[:4000], r.headers.get("server", "")
+        return r.status_code, r.text[:cap], r.headers.get("server", "")
     except Exception:
         return None
 
@@ -141,6 +141,74 @@ async def _probe_one(ip: str, hostname: str, port: int):
                     "title": None, "health_path": None}
         got["hostname"] = hostname
         return got
+
+
+def _parse_models(body: str) -> list:
+    """Model names from OpenAI-compat (data[].id / models[].name) or Ollama (models[].name)."""
+    try:
+        j = json.loads(body)
+    except ValueError:
+        return []
+    if not isinstance(j, dict):
+        return []
+    out = []
+    for key in ("data", "models"):
+        for m in j.get(key, []) or []:
+            out.append(m if isinstance(m, str)
+                       else (m.get("id") or m.get("name") or ""))
+    seen, res = set(), []
+    for name in out:
+        if name and name not in seen:
+            seen.add(name)
+            res.append(name)
+    return res[:30]
+
+
+async def inspect_endpoint(url: str) -> dict:
+    """Live deep-probe of one endpoint: identity, version, models, path map."""
+    import httpx
+    from urllib.parse import urlparse
+    url = url.rstrip("/")
+    u = urlparse(url)
+    port = u.port or (443 if u.scheme == "https" else 80)
+    paths = ["/", "/healthz", "/health", "/openapi.json", "/version",
+             "/v1/models", "/api/version", "/api/tags"]
+    try:
+        async with httpx.AsyncClient(timeout=4.0, verify=False,
+                                     follow_redirects=True) as client:
+            big = ("/v1/models", "/api/tags", "/openapi.json")
+            got = await asyncio.gather(
+                *[_get(client, url + p, 60000 if p in big else 4000) for p in paths])
+    except Exception as e:
+        return {"url": url, "ok": False, "error": f"{type(e).__name__}: {e}"}
+    res = {p: g for p, g in zip(paths, got) if g}
+    if not res:
+        return {"url": url, "ok": False, "error": "no HTTP response on any known path"}
+    title = version = None
+    if "/openapi.json" in res:
+        try:
+            info = json.loads(res["/openapi.json"][1]).get("info", {})
+            title, version = info.get("title"), info.get("version")
+        except ValueError:
+            pass
+    root = res.get("/")
+    body = root[1] if root else ""
+    server = (root[2] if root else "") or ""
+    kind = _kind(res, title, body, server, port)
+    models: list = []
+    for p in ("/v1/models", "/api/tags"):
+        if p in res and res[p][0] == 200:
+            models = _parse_models(res[p][1])
+            if models:
+                break
+    return {
+        "url": url, "ok": True, "kind": kind,
+        "http_status": root[0] if root else None,
+        "server": server, "title": title, "version": version,
+        "health_path": _pick_health(res, kind),
+        "models": models,
+        "paths": [{"path": p, "status": g[0]} for p, g in res.items()],
+    }
 
 
 STATE = {"running": False, "last_run": None, "last_count": 0}

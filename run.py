@@ -6,9 +6,17 @@ local .env file (gitignored). See .env.example.
 import os
 import socket
 import subprocess
+import sys
 from pathlib import Path
 
 import uvicorn
+
+# Windows consoles default to cp1252; never crash on our UTF-8 status glyphs.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 BASE_DIR = Path(__file__).resolve().parent
 
