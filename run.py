@@ -7,6 +7,7 @@ import os
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import uvicorn
@@ -56,16 +57,24 @@ def load_dotenv(path: Path = BASE_DIR / ".env") -> None:
 def resolve_host(preferred: str) -> str:
     """Try to bind the preferred host; fall back to localhost if unavailable
     (e.g. different machine, or Tailscale not running yet)."""
-    for port_try in (preferred, "127.0.0.1"):
-        with socket.socket() as s:
-            try:
-                s.bind((port_try, int(os.environ.get("DASH_PORT", "8088"))))
-                if port_try != preferred:
-                    print(f"⚠ could not bind {preferred} (not a local address / Tailscale down?) "
-                          f"— falling back to {port_try}")
-                return port_try
-            except OSError:
-                continue
+    port = int(os.environ.get("DASH_PORT", "8088"))
+    last_err = None
+    for attempt in range(3):                      # survive restart TIME_WAIT races
+        for port_try in (preferred, "127.0.0.1"):
+            with socket.socket() as s:
+                # Same option uvicorn's real server uses — without it a probe
+                # bind fails with EADDRINUSE on a TIME_WAIT socket even though
+                # nothing is listening (classic restart false-negative).
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    s.bind((port_try, port))
+                    if attempt:
+                        print(f"bind to {port_try} succeeded on retry {attempt + 1}")
+                    return port_try
+                except OSError as e:
+                    last_err = f"{port_try}: {e} (errno {e.errno})"
+        time.sleep(1.0)
+    print(f"⚠ could not bind preferred {last_err} — falling back to 127.0.0.1")
     return "127.0.0.1"
 
 
