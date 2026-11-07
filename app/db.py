@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS settings(
   key TEXT PRIMARY KEY,
   value TEXT
 );
+CREATE TABLE IF NOT EXISTS machine_meta(
+  key TEXT PRIMARY KEY,   -- hostname (lower) preferred, else tailnet IP
+  category TEXT NOT NULL,
+  updated_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS mcp_calls(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -220,6 +225,27 @@ def dismiss_discovery(did: int) -> bool:
     with conn() as c:
         cur = c.execute("UPDATE discoveries SET dismissed=1 WHERE id=?", (did,))
         return cur.rowcount > 0
+
+
+# ---------- machine_meta (topology category overrides) ----------
+
+def machine_categories() -> dict:
+    with conn() as c:
+        rows = c.execute("SELECT key, category FROM machine_meta").fetchall()
+    return {r["key"]: r["category"] for r in rows}
+
+
+def set_machine_category(key: str, category: str) -> None:
+    key = key.strip().lower()
+    with conn() as c:
+        if category in ("", "auto", "reset"):
+            c.execute("DELETE FROM machine_meta WHERE key=?", (key,))
+        else:
+            c.execute(
+                "INSERT INTO machine_meta(key,category,updated_at) VALUES(?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET category=excluded.category, "
+                "updated_at=excluded.updated_at",
+                (key, category, time.time()))
 
 
 # ---------- settings (kv) ----------

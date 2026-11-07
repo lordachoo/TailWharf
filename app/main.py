@@ -258,27 +258,35 @@ async def topology():
             h["ghosts"].append({"port": d["port"], "kind": d.get("kind") or "?",
                                 "url": d.get("url") or f"http://{d['ip']}:{d['port']}"})
 
-    out = []
+    manual = db.machine_categories()
+    out, ignored = [], []
     for h in hosts.values():
+        h["mkey"] = h["hostname"].lower() or h["ip"]
         n = len(h["services"])
         hn = h["hostname"].lower()
         if n >= 3:
-            h["role"] = "server"
+            guess = "server"
         elif n and _EDGE_RE.search(hn):
-            h["role"] = "edge"
+            guess = "edge"
         elif n and _CLIENT_RE.search(hn):
-            h["role"] = "client"
+            guess = "client"
         elif n:
-            h["role"] = "other"
+            guess = "other"
         else:
-            h["role"] = "idle" if h["online"] or not st.get("available") else "absent"
+            guess = "idle" if h["online"] or not st.get("available") else "absent"
+        # manual override wins over the heuristic guess
+        h["role"] = manual.get(h["mkey"]) or manual.get(h["ip"]) or guess
+        h["role_auto"] = guess
+        if h["role"] == "ignore":
+            ignored.append({"mkey": h["mkey"], "hostname": h["hostname"], "ip": h["ip"]})
+            continue
         h["down"] = any(sv["ok"] is False for sv in h["services"])
         h["services"].sort(key=lambda sv: (sv["ok"] is False, sv["name"].lower()))
         h["ghosts"].sort(key=lambda g: g["port"])
         if h["role"] != "absent" or h["services"]:
             out.append(h)
     out.sort(key=lambda h: (-len(h["services"]), h["hostname"] or h["ip"]))
-    return {"tailnet_name": st.get("tailnet_name"), "hosts": out,
+    return {"tailnet_name": st.get("tailnet_name"), "hosts": out, "ignored": ignored,
             "tailscale_available": st.get("available", False)}
 
 
@@ -351,6 +359,16 @@ async def harness_config(request: Request, url: str, svc: int | None = None):
             "http_status": info.get("http_status"),
             "hostname": (await hostname_map()).get(
                 urlparse(origin).hostname or "")}
+
+
+@app.put("/api/topology/machine/{key}")
+async def set_machine_cat(key: str, body: dict):
+    """Pin a machine's topology category (or 'auto' to clear, 'ignore' to hide)."""
+    cat = (body.get("category") or "").strip().lower()
+    if cat not in ("", "auto", "server", "edge", "client", "other", "ignore"):
+        raise HTTPException(422, "category must be auto|server|edge|client|other|ignore")
+    db.set_machine_category(key, cat)
+    return {"key": key.lower(), "category": cat or "auto"}
 
 
 @app.post("/api/discovery/run")

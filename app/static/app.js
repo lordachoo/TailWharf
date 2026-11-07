@@ -452,7 +452,11 @@ async function loadTopology() {
     cluster("AI Servers", "🗄", g.server) + cluster("Edge Boxes", "📟", g.edge)
     + cluster("Clients", "💻", g.client) + cluster("Elsewhere", "🌍", g.other)
     + (g.idle.length ? `<div class="hint" style="margin-top:14px">online, no tracked services: ${
-        g.idle.map((h) => esc(h.hostname || h.ip)).join(" · ")}</div>` : "");
+        g.idle.map((h) => esc(h.hostname || h.ip)).join(" · ")}</div>` : "")
+    + ((t.ignored || []).length ? `<div class="hint" style="margin-top:10px">🚫 ignored: ${
+        t.ignored.map((h) => `<button class="btn small" style="margin:0 4px"
+          onclick="restoreMachine('${esc(h.mkey)}')">↩ ${esc(h.hostname || h.mkey)}</button>`).join("")
+      }</div>` : "");
 }
 
 function topoNode(h) {
@@ -463,9 +467,17 @@ function topoNode(h) {
       ${s.ms != null ? `<em>${s.ms}ms</em>` : ""}</div>`;
   const ghost = (x) => `<div class="tchip ghost" title="Discovered but not tracked — click to add"
       onclick="addGhost('${esc(x.url)}','${esc(x.kind)}')">👻 <span class="tchip-n">:${x.port} ${esc(x.kind)}</span></div>`;
+  const cats = [["auto", "auto"], ["server", "🗄 server"], ["edge", "📟 edge"],
+                ["client", "💻 client"], ["other", "🌍 other"], ["ignore", "🚫 ignore"]];
+  const isManual = h.role !== h.role_auto;
+  const pill = `<select class="rolepill ${isManual ? "manual" : ""}"
+      title="${isManual ? "Manually set" : "Auto-detected: " + (h.role_auto || "")}" data-key="${esc(h.mkey)}"
+      onchange="setMachineCat(this)">
+      ${cats.map(([v, l]) => `<option value="${v}" ${h.role === v || (v === "auto" && h.role === h.role_auto) ? "selected" : ""}>${l}</option>`).join("")}
+    </select>`;
   return `<div class="tnode ${st} ${h.online ? "" : "toffline"}">
     <div class="tnode-h"><span class="tdot ${h.online ? "dot ok" : "dot"}"></span>
-      <b>${esc(h.hostname || h.ip)}</b>
+      <b>${esc(h.hostname || h.ip)}</b>${pill}
       <span class="tnode-ip">${esc(h.hostname ? h.ip : "")}</span></div>
     <div class="tchips">${h.services.map(chip).join("") || ""}${h.ghosts.map(ghost).join("") ||
       (h.services.length ? "" : '<span class="hint">nothing tracked here yet</span>')}</div>
@@ -473,6 +485,21 @@ function topoNode(h) {
 }
 
 const shortName = (n) => n.length > 18 ? n.slice(0, 17) + "…" : n;
+
+async function restoreMachine(key) {
+  await api(`/api/topology/machine/${encodeURIComponent(key)}`,
+    { method: "PUT", body: { category: "auto" } });
+  loadTopology();
+}
+
+async function setMachineCat(sel) {
+  await api(`/api/topology/machine/${encodeURIComponent(sel.dataset.key)}`,
+    { method: "PUT", body: { category: sel.value } });
+  toast(sel.value === "auto" ? "Back to auto-detect"
+    : sel.value === "ignore" ? "Hidden from map (restore via a machine's pill… or re-add later)"
+    : "Category pinned");
+  loadTopology();
+}
 
 function addGhost(url, kind) {
   closeForm();

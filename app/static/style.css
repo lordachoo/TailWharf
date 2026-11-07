@@ -131,6 +131,11 @@ canvas.sparkline { vertical-align: middle; }
 .hostname { color: var(--muted); font-size: 12px; }
 
 /* ---- topology ---- */
+.rolepill { margin-left: 6px; background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 10px; font-size: 10.5px;
+  padding: 1px 4px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.rolepill:hover { border-color: var(--accent); color: var(--fg); }
+.rolepill.manual { color: var(--accent); border-color: var(--accent); font-weight: 600; }
 .cluster { margin: 18px 0 6px; }
 .cluster h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .04em; color: var(--muted);
   text-transform: uppercase; display: flex; align-items: center; gap: 8px; }

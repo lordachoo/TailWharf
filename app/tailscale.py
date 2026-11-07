@@ -47,7 +47,9 @@ async def tailnet_status() -> dict:
         )
         out, err = await asyncio.wait_for(proc.communicate(), timeout=10)
         if proc.returncode != 0:
-            return {"available": False, "error": err.decode(errors="replace")[:200], "self": None, "peers": []}
+            return {"available": False,
+                    "error": f"rc={proc.returncode} {err.decode(errors='replace')[:180]}",
+                    "self": None, "peers": []}
         st = json.loads(out)
     except Exception as e:
         return {"available": False, "error": f"{type(e).__name__}: {e}", "self": None, "peers": []}
