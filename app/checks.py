@@ -51,9 +51,9 @@ LINK_PRESETS = {
         {"label": "Version", "path": "/version"},
     ],
     "phoenix": [
-        {"name": "Trace Viewer", "path": "/", "icon": "🪱"},
-        {"name": "Datasets", "path": "/datasets", "icon": "🧪"},
-        {"name": "Prompts", "path": "/prompts", "icon": "✏️"},
+        {"label": "🪱 Trace Viewer", "path": "/"},
+        {"label": "🧪 Datasets", "path": "/datasets"},
+        {"label": "✏️ Prompts", "path": "/prompts"},
     ],
     "ollama": [
         {"label": "Tags JSON", "path": "/api/tags"},
