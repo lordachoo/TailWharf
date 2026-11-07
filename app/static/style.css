@@ -150,9 +150,11 @@ canvas.sparkline { vertical-align: middle; }
   animation: redpulse 2.2s infinite; }
 @keyframes redpulse { 50% { box-shadow: 0 0 0 1px rgba(248,81,73,.25), 0 0 8px rgba(248,81,73,.05); } }
 .tnode.toffline { opacity: .55; }
-.tnode-h { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }
-.tnode-h b { font-size: 13px; }
-.tnode-ip { color: var(--muted); font-size: 11px; margin-left: auto; font-family: Consolas, monospace; }
+.tnode-h { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; flex-wrap: wrap; }
+.tnode-h b { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 128px; }
+.tnode-ip { color: var(--muted); font-size: 11px; margin-left: auto; font-family: Consolas, monospace;
+  white-space: nowrap; flex: 0 0 auto; }
 .tdot { width: 9px; height: 9px; border-radius: 50%; background: #565d68; display: inline-block; }
 .tdot.dot.ok { background: var(--up); box-shadow: 0 0 6px var(--up); }
 .tchips { display: flex; flex-direction: column; gap: 5px; }
