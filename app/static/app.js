@@ -16,9 +16,42 @@ const ago = (ts) => {
 };
 
 function adminHeaders() {
-  const t = localStorage.getItem("dashToken");
+  const t = sessionStorage.getItem("dashToken") || localStorage.getItem("dashToken");
   return t ? { "Authorization": "Bearer " + t } : {};
 }
+
+/* Elegant unlock bar: appears at top on the first 401, resolves pending
+   calls in place — no browser prompt popups. */
+let tokenWaiters = [];
+function showTokenBar() {
+  return new Promise((resolve, reject) => {
+    tokenWaiters.push({ resolve, reject });
+    $("#tokenbar").classList.remove("hidden");
+    $("#token-input").focus();
+  });
+}
+$("#token-save").addEventListener("click", () => {
+  const t = $("#token-input").value.trim();
+  if (!t) return;
+  ($("#token-remember").checked ? localStorage : sessionStorage).setItem("dashToken", t);
+  $("#tokenbar").classList.add("hidden");
+  $("#token-input").value = "";
+  tokenWaiters.forEach((w) => w.resolve());
+  tokenWaiters = [];
+});
+$("#token-cancel").addEventListener("click", () => {
+  $("#tokenbar").classList.add("hidden");
+  tokenWaiters.forEach((w) => w.reject(new Error("cancelled")));
+  tokenWaiters = [];
+});
+$("#token-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("#token-save").click();
+  if (e.key === "Escape") $("#token-cancel").click();
+});
+window.clearStoredToken = () => {
+  sessionStorage.removeItem("dashToken");
+  localStorage.removeItem("dashToken");
+};
 
 async function api(path, opts = {}) {
   const call = () => fetch(path, {
@@ -27,9 +60,16 @@ async function api(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   let r = await call();
-  if (r.status === 401) {              // privileged call: ask for the hub token once
-    const t = prompt("Admin token required — enter MCP_TOKEN (from the server's .env):");
-    if (t) { localStorage.setItem("dashToken", t.trim()); r = await call(); }
+  if (r.status === 401) {              // privileged: inline token bar, then retry in place
+    try {
+      await showTokenBar();
+      r = await call();
+    } catch { throw new Error("unauthorized"); }
+  }
+  if (!r.ok && r.status === 401) {     // wrong token: clear it and fail cleanly
+    window.clearStoredToken();
+    toast("Token rejected");
+    throw new Error("unauthorized");
   }
   if (!r.ok) {
     let msg = r.statusText;
@@ -492,7 +532,10 @@ async function mcpRunTest() {
 
 /* ---------- export / import ---------- */
 async function doExport(secrets) {
-  const r = await fetch(`/api/export?secrets=${secrets ? "true" : "false"}`, { headers: adminHeaders() });
+  const url = `/api/export?secrets=${secrets ? "true" : "false"}`;
+  let r = await fetch(url, { headers: adminHeaders() });
+  if (r.status === 401) { try { await showTokenBar(); r = await fetch(url, { headers: adminHeaders() }); } catch { return; } }
+  if (r.status === 401) { window.clearStoredToken(); toast("Token rejected"); return; }
   const blob = await r.blob();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

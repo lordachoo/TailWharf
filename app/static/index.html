@@ -7,6 +7,15 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="tokenbar" class="hidden">
+  <span class="tb-icon">🔒</span>
+  <span class="tb-label">This action needs the dashboard token</span>
+  <input id="token-input" type="password" placeholder="MCP_TOKEN" autocomplete="off">
+  <button class="btn small primary" id="token-save">Unlock</button>
+  <label class="tb-remember"><input type="checkbox" id="token-remember"> remember on this machine</label>
+  <button class="btn small" id="token-cancel">Cancel</button>
+</div>
+
 <header>
   <div class="brand">
     <span class="logo">⬡</span>

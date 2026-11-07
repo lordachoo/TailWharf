@@ -120,6 +120,14 @@ canvas.sparkline { vertical-align: middle; }
 .howto ol, .howto ul { margin: 6px 0; padding-left: 22px; line-height: 1.7; }
 .howto code { background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
   padding: 1px 5px; font-size: 12px; }
+#tokenbar { position: sticky; top: 0; z-index: 60; display: flex; align-items: center;
+  gap: 10px; padding: 9px 16px; background: #221b08; border-bottom: 1px solid #b58900;
+  font-size: 13px; flex-wrap: wrap; }
+#tokenbar .tb-icon { font-size: 15px; }
+#tokenbar .tb-label { color: #e3b341; font-weight: 600; }
+#tokenbar input[type=password] { background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; width: 240px; }
+#tokenbar .tb-remember { color: var(--muted); display: flex; align-items: center; gap: 5px; }
 .hostname { color: var(--muted); font-size: 12px; }
 .btn.accent { border-color: var(--accent); color: var(--accent); }
 .hcline { margin: 12px 0 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
