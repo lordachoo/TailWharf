@@ -14,6 +14,7 @@ SCAN_PORTS = {
     8080: "http", 8081: "vllm", 8088: "http", 8090: "http", 8443: "http",
     8888: "searxng", 9000: "http", 9090: "http", 9443: "http",
     11235: "crawl4ai", 11434: "ollama", 28080: "http",
+    6006: "phoenix", 4317: "otlp-grpc", 4318: "otlp-http",
 }
 
 TLS_PORTS = {443, 8443, 9443}
@@ -88,6 +89,8 @@ async def _classify(ip: str, port: int):
 def _kind(res, title, body, server, port) -> str:
     low = (body or "").lower()
     tlow = (title or "").lower()
+    if "arizephoenix" in low or "<title>phoenix<" in low or tlow == "phoenix":
+        return "phoenix"
     if "searx" in low or "searx" in server.lower():
         return "searxng"
     if "docling" in tlow or "docling" in low:

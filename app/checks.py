@@ -16,6 +16,9 @@ PRESETS = {
     "docling":   {"path": "/health",       "label": "IBM Docling Serve"},
     "llamaswap": {"path": "/health",       "label": "llama-swap"},
     "litellm":   {"path": "/health/liveliness", "label": "LiteLLM Proxy"},
+    # content assertion: SPA returns 200-HTML for every path, so require
+    # the app's own signature in the body or a broken backend looks UP
+    "phoenix":   {"path": "/", "label": "Arize Phoenix (tracing)", "content": "phoenix"},
     "http":      {"path": "/",              "label": "Generic HTTP"},
     "health":    {"path": "",               "label": "Health endpoint"},
     "tcp":       {"path": None,             "label": "TCP only"},
@@ -46,6 +49,11 @@ LINK_PRESETS = {
     "docling": [
         {"label": "API docs (ReDoc)", "path": "/docs"},
         {"label": "Version", "path": "/version"},
+    ],
+    "phoenix": [
+        {"name": "Trace Viewer", "path": "/", "icon": "🪱"},
+        {"name": "Datasets", "path": "/datasets", "icon": "🧪"},
+        {"name": "Prompts", "path": "/prompts", "icon": "✏️"},
     ],
     "ollama": [
         {"label": "Tags JSON", "path": "/api/tags"},
@@ -119,8 +127,12 @@ async def _check_http(svc: dict) -> dict:
             r = await client.request(method, url, headers=headers)
         latency = (time.perf_counter() - t0) * 1000
         detail = _summarize(svc.get("type", "http"), r)
+        need = (PRESETS.get(svc.get("type") or "") or {}).get("content")
+        content_ok = need is None or need in r.text[:8000].lower()
+        if not content_ok:
+            detail = f"200 OK but app signature '{need}' missing — wrong app on port?"
         return {
-            "ok": r.status_code == expect,
+            "ok": r.status_code == expect and content_ok,
             "status_code": r.status_code,
             "latency_ms": round(latency, 1),
             "detail": detail,

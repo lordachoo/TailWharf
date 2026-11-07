@@ -435,7 +435,7 @@ $("#btn-scan").addEventListener("click", async () => {
 /* ---------- topology ---------- */
 const GLYPHS = { vllm: "🧠", llamaswap: "🔀", litellm: "🔀", ollama: "🦙",
   searxng: "🔍", crawl4ai: "🌐", docling: "📄", openwebui: "🖥",
-  health: "💓", http: "🌍", tcp: "🔌" };
+  phoenix: "🪱", health: "💓", http: "🌍", tcp: "🔌" };
 
 async function loadTopology() {
   $("#topo-status").textContent = "mapping…";
