@@ -23,3 +23,6 @@ Thumbs.db
 
 # pi assistant working memory (local only)
 .pi/
+
+# local security notes — do not publish until findings are fixed
+SECURITY-REPORT.md

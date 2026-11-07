@@ -118,7 +118,7 @@ function svcCard(s) {
 }
 
 function quickLinks(s) {
-  const links = [];
+  const links = [{ label: "Open", url: s.url }];
   try {
     const origin = new URL(s.url).origin;
     for (const p of state.meta.link_presets?.[s.type] || [])
