@@ -9,6 +9,22 @@ FastAPI backend + SQLite storage + dependency-free vanilla-JS SPA.
 No Node build chain, no cloud account, no Tailscale API key required —
 the local `tailscale` CLI is the device feed.
 
+> ## ⚠ Security model — read first
+>
+> This dashboard has **no user accounts**. Its one security control is an
+> optional **bearer token** (`MCP_TOKEN`) which guards the MCP endpoint and
+> ALL privileged operations (MCP admin/test, registry import, export,
+> harness-config key reveal). With no token set, **anyone who can reach the
+> port fully administers the dashboard** and can use the host to probe URLs.
+>
+> **Bind only to a Tailscale `100.x` address or `127.0.0.1`** (the default
+> auto-detect does this for you). Never `0.0.0.0`, never behind a reverse
+> proxy / Tailscale Funnel / port-forward without an authenticating layer.
+>
+> Verify your exposure: printed bind URL is `100.x`/`127.x`; the firewall
+> rule is scoped `remoteip=100.64.0.0/10`; Tailscale ACLs restrict `:8088`
+> to your user/tag; a curl from a non-tailnet LAN host gets refused.
+
 ---
 
 ## Features
@@ -207,46 +223,40 @@ Known limitations:
   page is "reachable", not necessarily "healthy" — point those services at an
   authenticated health endpoint via header auth if you need true app health.
 
-## Web access via your own stack (`tools/webtools.py`)
+## Web access via your own stack
 
-Turns your SearXNG + Crawl4AI into a private search/read pipeline — useful
-for scripts, agents, or manual checks. No third-party APIs; queries never
-leave your infrastructure.
-
-```bash
-.venv/Scripts/python tools/webtools.py search "your query" --n 5
-.venv/Scripts/python tools/webtools.py fetch https://example.com --max 6000
-.venv/Scripts/python tools/webtools.py raw   https://example.com   # full Crawl4AI JSON
-```
-
-Requires `SEARXNG_URL`, `CRAWL4AI_URL`, `CRAWL4AI_API_KEY` in `.env`
-(gitignored; see `.env.example`). SearXNG must have `format=json` enabled
-(yours does). The Crawl4AI key is only ever read from the environment — it
-appears in no source file, no git object, and no API response.
+Your SearXNG + Crawl4AI become a private search/read pipeline through the
+MCP hub tools (`web_search`, `web_fetch`) — no third-party APIs; queries
+never leave your infrastructure. Requires `SEARXNG_URL`, `CRAWL4AI_URL`,
+`CRAWL4AI_API_KEY` in `.env` (gitignored; see `.env.example`). SearXNG must
+have `format=json` enabled. The Crawl4AI key is only ever read from the
+environment — it appears in no source file and no git object.
 
 ## Security
 
-* **The dashboard has no authentication.** Its blast radius: viewing status,
-  adding/removing services, making this machine send HTTP requests to
-  user-defined URLs, and seeing your tailnet inventory.
-* **Default exposure is deliberately minimal.** `127.0.0.1` = nothing but this
-  machine. A Tailscale-IP bind (documented in `.env`) = your tailnet only
-  *provided your tailnet is private and your LAN firewall doesn't allow
-  8088 in from elsewhere* — check your Windows Firewall rule scope
-  (`remoteip=100.64.0.0/10` limits it to tailnet).
+* **Trust boundary = the port.** Anyone who can reach it can read status;
+  privileged operations (MCP hub + tools, import, export, harness-config)
+  additionally require `Authorization: Bearer <MCP_TOKEN>` when one is set.
+  The SPA prompts for the token once and remembers it. **Set MCP_TOKEN**
+  (setup scripts generate a strong one).
+* **Default exposure is deliberately minimal.** Auto-bind targets this
+  machine's Tailscale IP; falls back to `127.0.0.1`, never `0.0.0.0`.
+  Firewall guidance ships in `scripts/autostart.ps1`
+  (`remoteip=100.64.0.0/10`). Remember: "your tailnet" means **every
+  ACL-permitted device**, guest tags included — lock `:8088` down in
+  Tailscale ACLs.
 * **Secrets handling:**
-  * No credentials are hardcoded anywhere in the source.
-  * Optional per-service auth headers (e.g. `Authorization: Bearer …`) are
-    stored in the local SQLite DB (`data/dash.db`, gitignored). They are
-    **never returned by any API response** — clients only receive
-    `has_auth: true`. Editing a service with a blank secret field preserves
-    the stored value.
-  * `.env` is gitignored; only `.env.example` (no secrets) is committed.
-  * Anyone with filesystem access to `data/dash.db` can read stored service
-    auth headers — that's inherent to local storage; lock the folder if that
-    matters.
-* Check the diff before pushing this repo anywhere public: it's designed for
-  private use, and your `.env`/`data/` must never be pushed.
+  * No credentials hardcoded anywhere in source.
+  * Per-service auth headers are stored in `data/dash.db` (gitignored).
+    Normal service endpoints return only `has_auth: true`. The two places
+    a stored key can surface — `harness-config` (key reveal for snippets)
+    and `export?secrets=true` — are **token-gated**, and a stored key is
+    only ever sent to probes of the **same origin** it is saved for
+    (no credential-follows-the-URL exfil path).
+  * Editing a service with a blank secret preserves the stored value.
+  * Filesystem access to `data/dash.db` = access to stored keys (inherent
+    to local storage): `chmod 600` on `data/` and `.env`.
+* Bearer comparisons are constant-time (`hmac.compare_digest`).
 
 ## Troubleshooting
 

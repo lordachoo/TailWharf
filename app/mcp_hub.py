@@ -6,6 +6,7 @@ Auth:      if MCP_TOKEN env is set, clients must send  Authorization: Bearer <MC
 Admin API for the dashboard tab: /api/mcp  (status, tools, toggle, test, call log)
 """
 import asyncio
+import hmac
 import json
 import os
 import time
@@ -27,6 +28,22 @@ SEARXNG_URL = os.environ.get("SEARXNG_URL", "")
 CRAWL4AI_URL = os.environ.get("CRAWL4AI_URL", "")
 CRAWL4AI_KEY = os.environ.get("CRAWL4AI_API_KEY", "")
 MCP_TOKEN = os.environ.get("MCP_TOKEN", "")
+
+
+def admin_ok(request: Request) -> bool:
+    """Privileged gate: when MCP_TOKEN is set, the SAME bearer is required on
+    every admin/secret-adjacent endpoint (/api/mcp/*, import, export,
+    harness-config) — closing the old bypass where the hub's tools were
+    callable token-free through /api/mcp/test."""
+    if not MCP_TOKEN:
+        return True
+    auth = request.headers.get("authorization", "")
+    return hmac.compare_digest(auth, f"Bearer {MCP_TOKEN}")
+
+
+def unauthorized() -> JSONResponse:
+    return JSONResponse({"detail": "unauthorized: send Authorization: Bearer <MCP_TOKEN>"},
+                        status_code=401)
 
 DISABLED_KEY = "mcp_disabled_tools"
 
@@ -179,10 +196,8 @@ def _rpc_error(rid, code, message, http=200):
 @router.post("/mcp")
 async def mcp_endpoint(request: Request):
     # bearer auth (only when MCP_TOKEN configured)
-    if MCP_TOKEN:
-        auth = request.headers.get("authorization", "")
-        if auth != f"Bearer {MCP_TOKEN}":
-            return _rpc_error(None, -32001, "unauthorized: set Authorization: Bearer <MCP_TOKEN>", http=401)
+    if not admin_ok(request):
+        return _rpc_error(None, -32001, "unauthorized: set Authorization: Bearer <MCP_TOKEN>", http=401)
 
     try:
         req = await request.json()
@@ -226,6 +241,8 @@ async def mcp_endpoint(request: Request):
 
 @router.get("/api/mcp")
 async def mcp_admin(request: Request):
+    if not admin_ok(request):
+        return unauthorized()
     from .tailscale import hostname_map
     dis = _disabled()
     hosts = await hostname_map()
@@ -247,7 +264,9 @@ async def mcp_admin(request: Request):
 
 
 @router.post("/api/mcp/tools/{name}/toggle")
-async def mcp_toggle(name: str):
+async def mcp_toggle(name: str, request: Request):
+    if not admin_ok(request):
+        return unauthorized()
     if name not in TOOLS:
         raise HTTPException(404, "unknown tool")
     dis = _disabled()
@@ -260,7 +279,9 @@ async def mcp_toggle(name: str):
 
 
 @router.post("/api/mcp/test")
-async def mcp_test(body: dict):
+async def mcp_test(body: dict, request: Request):
+    if not admin_ok(request):
+        return unauthorized()
     name = body.get("name", "")
     if name not in TOOLS:
         raise HTTPException(404, "unknown tool")

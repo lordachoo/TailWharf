@@ -10,11 +10,11 @@ $TaskName = "tailnet-dash"
 
 if ($Action -eq "register") {
     if (-not (Test-Path $Py)) { Write-Error "venv missing — run scripts\setup.ps1 first"; exit 1 }
-    $action = New-ScheduledTaskAction -Execute $Py -Argument "run.py" -WorkingDirectory $Root
+    $taskAction = New-ScheduledTaskAction -Execute $Py -Argument "run.py" -WorkingDirectory $Root
     $trigger = New-ScheduledTaskTrigger -AtLogOn
     $settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
         -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Trigger $trigger -Settings $settings -Force | Out-Null
     Write-Host "Scheduled task '$TaskName' registered (starts at logon)."
     try {
         netsh advfirewall firewall delete rule name="tailnet-dash" 2>$null | Out-Null

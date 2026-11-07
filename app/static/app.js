@@ -15,12 +15,22 @@ const ago = (ts) => {
   return `${Math.floor(d / 3600)}h ago`;
 };
 
+function adminHeaders() {
+  const t = localStorage.getItem("dashToken");
+  return t ? { "Authorization": "Bearer " + t } : {};
+}
+
 async function api(path, opts = {}) {
-  const r = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
+  const call = () => fetch(path, {
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
+  let r = await call();
+  if (r.status === 401) {              // privileged call: ask for the hub token once
+    const t = prompt("Admin token required — enter MCP_TOKEN (from the server's .env):");
+    if (t) { localStorage.setItem("dashToken", t.trim()); r = await call(); }
+  }
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).detail ?? msg; } catch {}
@@ -482,7 +492,7 @@ async function mcpRunTest() {
 
 /* ---------- export / import ---------- */
 async function doExport(secrets) {
-  const r = await fetch(`/api/export?secrets=${secrets ? "true" : "false"}`);
+  const r = await fetch(`/api/export?secrets=${secrets ? "true" : "false"}`, { headers: adminHeaders() });
   const blob = await r.blob();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

@@ -6,7 +6,10 @@ python -m venv .venv
 
 if (-not (Test-Path .env)) {
     Copy-Item .env.example .env
-    $token = -join ((48..57)+(97..122) | Get-Random -Count 64 | ForEach-Object {[char]$_})
+    # cryptographically random token (Get-Random is NOT suitable for secrets)
+    $rngBytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($rngBytes)
+    $token = -join ($rngBytes | ForEach-Object { $_.ToString("x2") })
     (Get-Content .env) -replace '^MCP_TOKEN=$', "MCP_TOKEN=$token" | Set-Content .env
     Write-Host "==> created .env with a random MCP_TOKEN (edit CRAWL4AI_API_KEY etc.)"
 }

