@@ -31,6 +31,7 @@
   <button class="tab active" data-tab="dashboard">Services</button>
   <button class="tab" data-tab="discovery">Discovery <span class="badge" id="disc-badge"></span></button>
   <button class="tab" data-tab="tailnet">Tailnet</button>
+  <button class="tab" data-tab="topology">Topology</button>
   <button class="tab" data-tab="mcp">MCP Hub</button>
 </nav>
 
@@ -84,6 +85,16 @@
     <p class="hint">Scans every <b>online</b> tailnet device on ~20 common AI-service ports
       (Ollama, vLLM, SearXNG, Crawl4AI, Open WebUI, ComfyUI…) and fingerprints what answers.</p>
     <div id="discoveries" class="grid"></div>
+  </section>
+
+  <!-- TOPOLOGY -->
+  <section id="tab-topology" class="hidden">
+    <div class="toolbar">
+      <span class="hint" id="topo-status"></span>
+      <span class="spacer"></span>
+      <span class="hint">🟢 up &nbsp; 🔴 down &nbsp; 👻 discovered · click to add &nbsp;· click a chip for details</span>
+    </div>
+    <div id="topology"></div>
   </section>
 
   <!-- MCP HUB -->

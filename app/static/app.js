@@ -113,8 +113,9 @@ $$(".tab").forEach((b) => b.addEventListener("click", () => {
   $$(".tab").forEach((x) => x.classList.remove("active"));
   b.classList.add("active");
   clearInterval(state.mcpTimer);
-  ["dashboard", "discovery", "tailnet", "mcp"].forEach((t) =>
+  ["dashboard", "discovery", "tailnet", "topology", "mcp"].forEach((t) =>
     $(`#tab-${t}`).classList.toggle("hidden", t !== b.dataset.tab));
+  if (b.dataset.tab === "topology") loadTopology();
   if (b.dataset.tab === "discovery") loadDiscoveries();
   if (b.dataset.tab === "tailnet") loadTailnet();
   if (b.dataset.tab === "mcp") loadMCP();
@@ -430,6 +431,58 @@ $("#btn-scan").addEventListener("click", async () => {
     if (!d.state.running) { clearInterval(iv); toast(`Scan done — ${d.state.last_count} open ports`); }
   }, 1500);
 });
+
+/* ---------- topology ---------- */
+const GLYPHS = { vllm: "🧠", llamaswap: "🔀", litellm: "🔀", ollama: "🦙",
+  searxng: "🔍", crawl4ai: "🌐", docling: "📄", openwebui: "🖥",
+  health: "💓", http: "🌍", tcp: "🔌" };
+
+async function loadTopology() {
+  $("#topo-status").textContent = "mapping…";
+  const t = await api("/api/topology");
+  const g = { server: [], edge: [], client: [], other: [], idle: [] };
+  t.hosts.forEach((h) => (g[h.role] || g.other).push(h));
+  $("#topo-status").textContent =
+    `${t.tailnet_name || "tailnet"} · ${t.hosts.filter((h) => h.services.length).length} hosts with services` +
+    ` · ${t.hosts.filter((h) => h.ghosts.length).length} with untracked ports`;
+  const cluster = (title, icon, arr) => arr.length
+    ? `<div class="cluster"><h3>${icon} ${title} <span class="badge">${arr.length}</span></h3>
+       <div class="tnodes">${arr.map(topoNode).join("")}</div></div>` : "";
+  $("#topology").innerHTML =
+    cluster("AI Servers", "🗄", g.server) + cluster("Edge Boxes", "📟", g.edge)
+    + cluster("Clients", "💻", g.client) + cluster("Elsewhere", "🌍", g.other)
+    + (g.idle.length ? `<div class="hint" style="margin-top:14px">online, no tracked services: ${
+        g.idle.map((h) => esc(h.hostname || h.ip)).join(" · ")}</div>` : "");
+}
+
+function topoNode(h) {
+  const st = h.down ? "tdown" : h.services.length ? "tup" : "";
+  const chip = (s) => `<div class="tchip" onclick="openDrawer(${s.id})" title="${esc(s.name)} · :${s.port}">
+      <span>${GLYPHS[s.type] || "•"}</span><span class="tchip-n">${esc(shortName(s.name))}</span>
+      <i style="color:${s.ok == null ? "var(--muted)" : s.ok ? "var(--up)" : "var(--down)"}">●</i>
+      ${s.ms != null ? `<em>${s.ms}ms</em>` : ""}</div>`;
+  const ghost = (x) => `<div class="tchip ghost" title="Discovered but not tracked — click to add"
+      onclick="addGhost('${esc(x.url)}','${esc(x.kind)}')">👻 <span class="tchip-n">:${x.port} ${esc(x.kind)}</span></div>`;
+  return `<div class="tnode ${st} ${h.online ? "" : "toffline"}">
+    <div class="tnode-h"><span class="tdot ${h.online ? "dot ok" : "dot"}"></span>
+      <b>${esc(h.hostname || h.ip)}</b>
+      <span class="tnode-ip">${esc(h.hostname ? h.ip : "")}</span></div>
+    <div class="tchips">${h.services.map(chip).join("") || ""}${h.ghosts.map(ghost).join("") ||
+      (h.services.length ? "" : '<span class="hint">nothing tracked here yet</span>')}</div>
+  </div>`;
+}
+
+const shortName = (n) => n.length > 18 ? n.slice(0, 17) + "…" : n;
+
+function addGhost(url, kind) {
+  closeForm();
+  $("#add-form").classList.remove("hidden");
+  const sel = $("#f-type");
+  if ([...sel.options].some((o) => o.value === kind)) sel.value = kind;
+  $("#f-url").value = url;
+  updatePreview();
+  toast("Ghost adopted — fill the name and save");
+}
 
 /* ---------- tailnet ---------- */
 async function loadTailnet() {

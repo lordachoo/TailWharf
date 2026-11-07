@@ -1,6 +1,7 @@
 """Tailnet AI Service Dashboard - FastAPI app."""
 import asyncio
 import json
+import re
 import time
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
@@ -200,6 +201,85 @@ async def _check_and_record(svc):
 @app.get("/api/tailnet")
 async def tailnet():
     return await tailnet_status()
+
+
+# ---------- topology ----------
+
+_CLIENT_RE = re.compile(r"lap|book|desktop|workstation|^pc[-_]|-pc$", re.I)
+_EDGE_RE = re.compile(r"spark|jetson|nano|orange|rock|radax|rpi|^pi-", re.I)
+
+
+@app.get("/api/topology")
+async def topology():
+    """Machines × their services × discovery ghosts for the Topology tab."""
+    st = await tailnet_status()
+    services = db.list_services()
+
+    def parse(u):
+        try:
+            p = urlparse(u if "://" in u else "http://" + u)
+            return p.hostname, p.port or (443 if p.scheme == "https" else 80)
+        except ValueError:
+            return None, None
+
+    tracked = set()
+    hosts = {}
+
+    def get_host(ip, hostname=None, online=False):
+        h = hosts.get(ip)
+        if not h:
+            h = hosts[ip] = {"ip": ip, "hostname": hostname or "", "online": online,
+                             "services": [], "ghosts": []}
+        if hostname:
+            h["hostname"] = hostname
+        return h
+
+    for p in ([st["self"]] if st.get("self") else []) + st.get("peers", []):
+        if p.get("ip"):
+            get_host(p["ip"], (p.get("hostname") or "").split(".")[0], bool(p.get("online")))
+
+    for s in services:
+        ip, port = parse(s["url"])
+        lc = db.last_check(s["id"])
+        if ip:
+            tracked.add((ip, port))
+        h = hosts.get(ip) or get_host(ip or "unknown")
+        h["services"].append({
+            "id": s["id"], "name": s["name"], "type": s["type"], "port": port,
+            "ok": bool(lc["ok"]) if lc else None,
+            "ms": round(lc["latency_ms"]) if lc and lc.get("latency_ms") is not None else None,
+        })
+
+    for d in db.list_discoveries():
+        key = (d["ip"], d["port"])
+        h = hosts.get(d["ip"])
+        if h is not None and key not in tracked:
+            tracked.add(key)  # dedupe ghost rows sharing a port
+            h["ghosts"].append({"port": d["port"], "kind": d.get("kind") or "?",
+                                "url": d.get("url") or f"http://{d['ip']}:{d['port']}"})
+
+    out = []
+    for h in hosts.values():
+        n = len(h["services"])
+        hn = h["hostname"].lower()
+        if n >= 3:
+            h["role"] = "server"
+        elif n and _EDGE_RE.search(hn):
+            h["role"] = "edge"
+        elif n and _CLIENT_RE.search(hn):
+            h["role"] = "client"
+        elif n:
+            h["role"] = "other"
+        else:
+            h["role"] = "idle" if h["online"] or not st.get("available") else "absent"
+        h["down"] = any(sv["ok"] is False for sv in h["services"])
+        h["services"].sort(key=lambda sv: (sv["ok"] is False, sv["name"].lower()))
+        h["ghosts"].sort(key=lambda g: g["port"])
+        if h["role"] != "absent" or h["services"]:
+            out.append(h)
+    out.sort(key=lambda h: (-len(h["services"]), h["hostname"] or h["ip"]))
+    return {"tailnet_name": st.get("tailnet_name"), "hosts": out,
+            "tailscale_available": st.get("available", False)}
 
 
 # ---------- discovery ----------
